@@ -1,24 +1,4 @@
-/*
-  Web client
-
- This sketch connects to a website (wifitest.adafruit.com/testwifi/index.html)
- using the WiFi module.
-
- This example is written for a network using WPA encryption. For
- WEP or WPA, change the Wifi.begin() call accordingly.
-
- This example is written for a network using WPA encryption. For
- WEP or WPA, change the Wifi.begin() call accordingly.
-
- Circuit:
- * Board with NINA module (Arduino MKR WiFi 1010, MKR VIDOR 4000 and UNO WiFi Rev.2)
-
- created 13 July 2010
- by dlf (Metodo2 srl)
- modified 31 May 2012
- by Tom Igoe
- */
-
+// AirLift_buttonthing - borrowing heavily from WiFiWebClient.ino in the Adafruit WiFiNINA library's examples
 
 #include <Arduino.h>
 #include <SPI.h>
@@ -72,14 +52,8 @@ char pass[] = SECRET_PASS;    // your network password (use for WPA, or use as k
 int keyIndex = 0;            // your network key Index number (needed only for WEP)
 
 int status = WL_IDLE_STATUS;
-// if you don't want to use DNS (and reduce your sketch size)
-// use the numeric IP instead of the name for the server:
-//IPAddress server(74,125,232,128);  // numeric IP for Google (no DNS)
 
 const char* host = "max.kenkl.org";
-
-//char server[] = "wifitest.adafruit.com";    // name address for adafruit test
-//char path[]   = "/testwifi/index.html";
 
 // Initialize the Ethernet client library
 // with the IP address and port of the server
@@ -90,11 +64,13 @@ const unsigned int clienttimeout = 60000;  //ms for client timeout in the doThin
 const int led = 12;
 
 const int button1 = 11;
-const char* url1 = "/lights/kcstog.php"; //was normal.php
+const char* url1 = "/lights/but7.php";
 int button1State = 0;
 
 void printWifiStatus();
 void doThing(const char* url);
+void doWiFi();
+void(* resetFunc) (void) = 0;
 
 void setup() {
   pinMode(button1, INPUT_PULLUP);
@@ -105,35 +81,12 @@ void setup() {
     ; // wait for serial port to connect. Needed for native USB port only
   }
   digitalWrite(led, 1);
-  Serial.println("AirLift_buttonthing (test) 20200130");
+  Serial.println("AirLift_buttonthing (test) 20200203");
   Serial.println("Calls kcstog.php via pin 11 pulldown.");
 
-  // check for the WiFi module:
-  WiFi.setPins(SPIWIFI_SS, SPIWIFI_ACK, ESP32_RESETN, ESP32_GPIO0, &SPIWIFI);
-  while (WiFi.status() == WL_NO_MODULE) {
-    Serial.println("Communication with WiFi module failed!");
-    // don't continue
-    delay(1000);
-  }
+  // Moved all the WiFi initialization bits to doWiFi() so we can reset it on-demand
+  doWiFi();
 
-  String fv = WiFi.firmwareVersion();
-  if (fv < "1.0.0") {
-    Serial.println("Please upgrade the firmware");
-  }
-  Serial.print("Found firmware "); Serial.println(fv);
-
-  // attempt to connect to Wifi network:
-  Serial.print("Attempting to connect to SSID: ");
-  Serial.println(ssid);
-  // Connect to WPA/WPA2 network. Change this line if using open or WEP network:
-  do {
-    status = WiFi.begin(ssid, pass);
-    delay(100);     // wait until connection is ready!
-  } while (status != WL_CONNECTED);
-
-  Serial.println("Connected to wifi");
-  printWifiStatus();
-  
   Serial.println("Startup complete. Waiting for button press...");
   digitalWrite(led, 0);
 
@@ -185,7 +138,18 @@ void doThing(const char* url) {
 WiFiClient client;
 const int httpPort = 80;
 if (!client.connect(host, httpPort)) {
-  Serial.println("connection failed");
+  // Provide a visual cue that we're in failure state
+  for(int i=0; i<5; i++) {
+    digitalWrite(led, 1);
+    delay(150);
+    digitalWrite(led, 0);
+    delay(150);
+  }
+  
+  Serial.println("connection failed - resetting...");
+  Serial.println();
+  delay(1000); // Give the UART a second to drain...
+  resetFunc();
   return;
 }
 
@@ -212,5 +176,37 @@ while (client.available() == 0) {
   Serial.println();
 
   digitalWrite(led, 0); // turn off the pilot
+
+}
+
+void doWiFi() {
+  digitalWrite(led, 1);
+  // check for the WiFi module:
+  WiFi.setPins(SPIWIFI_SS, SPIWIFI_ACK, ESP32_RESETN, ESP32_GPIO0, &SPIWIFI);
+  while (WiFi.status() == WL_NO_MODULE) {
+    Serial.println("Communication with WiFi module failed!");
+    // don't continue
+    delay(1000);
+  }
+
+  String fv = WiFi.firmwareVersion();
+  if (fv < "1.0.0") {
+    Serial.println("Please upgrade the firmware");
+  }
+  Serial.print("Found firmware "); Serial.println(fv);
+
+  // attempt to connect to Wifi network:
+  Serial.print("Attempting to connect to SSID: ");
+  Serial.println(ssid);
+  // Connect to WPA/WPA2 network. Change this line if using open or WEP network:
+  do {
+    status = WiFi.begin(ssid, pass);
+    delay(100);     // wait until connection is ready!
+  } while (status != WL_CONNECTED);
+
+  Serial.println("Connected to wifi");
+  printWifiStatus();
+
+  digitalWrite(led, 0);
 
 }
